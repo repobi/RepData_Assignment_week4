@@ -1,0 +1,97 @@
+---
+title: "Reproducible research week4 assignment"
+output:
+  html_document:
+    keep_md: yes
+  pdf_document:
+    latex_engine: xelatex
+---
+
+## Synopsis
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+This data analysis address the following questions:
+
+1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+2. Across the United States, which types of events have the greatest economic consequences?
+
+## Data Processing
+### 1. load the data
+```{r}
+library(tidyverse)
+library(ggrepel)
+
+# load csv file
+df <- read.csv(file = "repdata_data_StormData.csv")
+# revise the time format
+df$BGN_DATE <- as.Date(df$BGN_DATE, format="%m/%d/%Y 0:00:00")
+```
+
+### 2. manipulate the data
+### 2.1 check the data
+The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+```{r}
+# median of the BGN_date
+median(df$BGN_DATE)
+# histgram by years
+hist(df$BGN_DATE, breaks = "years")
+```
+
+### 2.2 selection of data
+```{r}
+# pickup after 2002-01-01
+df1 <- subset(df, BGN_DATE >= "2002-01-01")
+head(df1)
+```
+
+### 2.3 revise the data; from data documentation
+Alphabetical characters used to signify magnitude include “K” for thousands, “M” for millions, and “B” for billions.
+```{r}
+df1$PROPDMGEXP_n <- df1$PROPDMGEXP %>%
+        str_replace_all(c("K" = "1000", "M" = "1000000", "B" = "1000000000"))
+df1$CROPDMGEXP_n <- df1$CROPDMGEXP %>%
+        str_replace_all(c("K" = "1000", "M" = "1000000", "B" = "1000000000"))
+df1$PROPDMGEXP_n <- as.numeric(df1$PROPDMGEXP_n)
+df1$CROPDMGEXP_n <- as.numeric(df1$CROPDMGEXP_n)
+df1$PROPDMG_n <- df1$PROPDMG * df1$PROPDMGEXP_n
+df1$CROPDMG_n <- df1$CROPDMG * df1$CROPDMGEXP_n
+df2 <- df1[,c(8, 23, 24, 40, 41)]
+head(df2)
+```
+
+### 2.4 sum by event type
+```{r}
+df3 <- df2 %>%
+        group_by(EVTYPE) %>%
+        summarise(FATALITIES_total = sum(FATALITIES, na.rm = TRUE),
+                  INJURIES_total = sum(INJURIES, na.rm =  TRUE),
+                  PROPDMG_total = sum(PROPDMG_n, na.rm = TRUE),
+                  CROPDMG_total = sum(CROPDMG_n, na.rm =  TRUE)
+                  )
+head(df3)
+```
+
+## 3 Results
+### 3.1 analyze the data; damage on poplulation health
+#### Q. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+#### A. "TORNADE" is most harmful on people health.
+```{r}
+g <- ggplot(df3, aes(x = log10(FATALITIES_total), y = log10(INJURIES_total), label = EVTYPE))
+g + geom_point() + geom_label(alpha = 0.5)
+# 
+df3 %>%
+        arrange(desc(df3$FATALITIES_total+df3$INJURIES_total)) %>%
+        head()
+```
+
+### 3.2 analyze the data; ploting; damage on economics
+#### Q. 2. Across the United States, which types of events have the greatest economic consequences?
+#### A. "FLOOD" has the greatest impact on economics.
+```{r}
+g <- ggplot(df3, aes(x = log10(PROPDMG_total), y = log10(CROPDMG_total), label = EVTYPE))
+g + geom_point() + geom_label(alpha = 0.5)
+#
+df3 %>%
+        arrange(desc(df3$PROPDMG_total+df3$CROPDMG_total)) %>%
+        head()
+```
